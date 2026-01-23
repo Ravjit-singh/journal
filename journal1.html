@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>R Journal | Vitality</title>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&family=Outfit:wght@300;500;700&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- GSAP -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+
+    <!-- Config -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        void: '#050505',
+                        surface: '#0A0A0A',
+                        'surface-light': '#121212',
+                        emerald: {
+                            400: '#34d399',
+                            500: '#10b981',
+                            900: '#064e3b',
+                            glow: 'rgba(16, 185, 129, 0.4)'
+                        },
+                        text: {
+                            main: '#e5e5e5',
+                            muted: '#737373'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        display: ['Outfit', 'sans-serif'],
+                    },
+                    boxShadow: {
+                        'neon': '0 0 15px rgba(16, 185, 129, 0.15)',
+                        'neon-hover': '0 0 25px rgba(16, 185, 129, 0.25)',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #000000;
+            color: #e5e5e5;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Subtle pulsating background blob */
+        .bio-gradient {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100vw;
+            height: 100vh;
+            background: radial-gradient(circle at 50% 50%, rgba(6, 78, 59, 0.15) 0%, transparent 70%);
+            z-index: -1;
+            pointer-events: none;
+            opacity: 0.6;
+        }
+
+        /* Custom Input Styling */
+        .journal-card {
+            background: linear-gradient(145deg, rgba(20,20,20,0.6), rgba(10,10,10,0.8));
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        .journal-card:focus-within {
+            border-color: rgba(52, 211, 153, 0.5);
+            box-shadow: 0 0 30px rgba(16, 185, 129, 0.05);
+            transform: scale(1.01);
+            background: linear-gradient(145deg, rgba(25,25,25,0.8), rgba(15,15,15,0.9));
+        }
+
+        .journal-textarea {
+            resize: none;
+            background: transparent;
+            border: none;
+            outline: none;
+            line-height: 1.6;
+            min-height: 24px;
+        }
+
+        /* Timeline Connector */
+        .timeline-spine {
+            position: absolute;
+            left: 20px;
+            top: 60px;
+            bottom: 40px;
+            width: 2px;
+            background: linear-gradient(to bottom, transparent, #1f2937, #1f2937, transparent);
+            z-index: 0;
+        }
+
+        /* Date Picker Customization */
+        input[type="date"] {
+            color-scheme: dark;
+        }
+        
+        /* Save Button Animation */
+        .liquid-btn {
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        .liquid-btn::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+        .liquid-btn:active::before {
+            left: 100%;
+        }
+        
+        /* Loading Spinner */
+        .spinner {
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top: 2px solid #ffffff;
+            width: 16px;
+            height: 16px;
+            -webkit-animation: spin 1s linear infinite;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Auth Loading Veil */
+        #auth-loading {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #000;
+            z-index: 9999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+    </style>
+</head>
+<body class="antialiased min-h-screen flex flex-col items-center">
+
+    <!-- 0. Auth Guard (Runs Immediately) -->
+    <div id="auth-loading"><div class="spinner"></div></div>
+    <script>
+        (function() {
+            try {
+                const sessionData = localStorage.getItem('r_journal_session');
+                const authVeil = document.getElementById('auth-loading');
+                
+                if (!sessionData) {
+                    // No token -> Redirect to login
+                    window.location.href = 'login.html';
+                } else {
+                    const session = JSON.parse(sessionData);
+                    const now = new Date().getTime();
+                    
+                    if (session.expiry < now) {
+                        // Expired -> Clear & Redirect
+                        localStorage.removeItem('r_journal_session');
+                        window.location.href = 'login.html';
+                    } else {
+                        // Valid -> Allow Access & Set User Global
+                        window.currentUser = session.user;
+                        // Hide veil when DOM is ready (handled in main script or here)
+                        // We will fade it out in the main script for smoothness
+                    }
+                }
+            } catch (e) {
+                console.error("Auth check error", e);
+                window.location.href = 'login.html';
+            }
+        })();
+    </script>
+
+    <!-- Breathing Background -->
+    <div class="bio-gradient" id="bg-pulse"></div>
+
+    <main class="w-full max-w-lg px-5 py-8 pb-32 relative z-10">
+        
+        <!-- Header & Date -->
+        <header class="flex justify-between items-end mb-10 opacity-0" id="header-anim">
+            <div>
+                <p class="text-emerald-500 font-bold text-xs tracking-[0.2em] uppercase mb-1">
+                    R Journal <span class="text-text-muted font-normal normal-case tracking-normal opacity-50 ml-2">| <span id="user-display">...</span></span>
+                </p>
+                <h1 class="text-3xl font-display font-medium text-white tracking-tight">Daily Flow</h1>
+            </div>
+            
+            <div class="flex items-center gap-2">
+                <!-- Date Capsule -->
+                <div id="dateCapsule" class="relative group cursor-pointer">
+                    <div class="flex items-center gap-3 bg-surface-light border border-white/10 rounded-2xl px-4 py-2 hover:border-emerald-500/50 hover:bg-white/5 transition-all duration-300">
+                        <div class="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_10px_#10b981] animate-pulse pointer-events-none"></div>
+                        <span id="dateDisplay" class="text-sm font-medium font-sans text-gray-300 min-w-[80px] pointer-events-none">Loading...</span>
+                        <svg class="w-4 h-4 text-emerald-500 opacity-60 group-hover:opacity-100 transition-opacity pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                        </svg>
+                    </div>
+                    <input type="date" id="datePicker" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20">
+                </div>
+                
+                <!-- Logout Button -->
+                <button id="logoutBtn" class="bg-surface-light border border-white/10 rounded-2xl p-2 hover:bg-red-900/20 hover:border-red-500/50 hover:text-red-400 transition-all text-gray-500" title="Sign Out">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- Timeline Container -->
+        <div class="relative space-y-6">
+            <!-- Spine -->
+            <div class="timeline-spine"></div>
+
+            <!-- 08:00 AM -->
+            <div class="journal-entry relative opacity-0 transform translate-y-4">
+                <div class="flex gap-4">
+                    <div class="flex flex-col items-center gap-1 min-w-[40px]">
+                        <span class="text-xs font-mono text-emerald-500/80">08:00</span>
+                        <div class="w-3 h-3 rounded-full bg-surface border-2 border-emerald-900 z-10 box-dot transition-colors duration-300"></div>
+                    </div>
+                    <div class="journal-card flex-1 rounded-2xl p-5 group">
+                        <label class="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2 group-focus-within:text-emerald-400 transition-colors">Morning Start</label>
+                        <textarea id="t1" class="journal-textarea w-full text-base text-gray-200 placeholder-white/10" placeholder="Wake up thoughts..." rows="1"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 10:00 AM -->
+            <div class="journal-entry relative opacity-0 transform translate-y-4">
+                <div class="flex gap-4">
+                    <div class="flex flex-col items-center gap-1 min-w-[40px]">
+                        <span class="text-xs font-mono text-text-muted">10:00</span>
+                        <div class="w-3 h-3 rounded-full bg-surface border-2 border-white/10 z-10 box-dot transition-colors duration-300"></div>
+                    </div>
+                    <div class="journal-card flex-1 rounded-2xl p-5 group">
+                        <label class="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2 group-focus-within:text-emerald-400 transition-colors">Mid-Morning</label>
+                        <textarea id="t2" class="journal-textarea w-full text-base text-gray-200 placeholder-white/10" placeholder="Focus tasks..." rows="1"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 01:00 PM -->
+            <div class="journal-entry relative opacity-0 transform translate-y-4">
+                <div class="flex gap-4">
+                    <div class="flex flex-col items-center gap-1 min-w-[40px]">
+                        <span class="text-xs font-mono text-text-muted">13:00</span>
+                        <div class="w-3 h-3 rounded-full bg-surface border-2 border-white/10 z-10 box-dot transition-colors duration-300"></div>
+                    </div>
+                    <div class="journal-card flex-1 rounded-2xl p-5 group">
+                        <label class="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2 group-focus-within:text-emerald-400 transition-colors">Afternoon</label>
+                        <textarea id="t3" class="journal-textarea w-full text-base text-gray-200 placeholder-white/10" placeholder="Lunch & reset..." rows="1"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 04:00 PM -->
+            <div class="journal-entry relative opacity-0 transform translate-y-4">
+                <div class="flex gap-4">
+                    <div class="flex flex-col items-center gap-1 min-w-[40px]">
+                        <span class="text-xs font-mono text-text-muted">16:00</span>
+                        <div class="w-3 h-3 rounded-full bg-surface border-2 border-white/10 z-10 box-dot transition-colors duration-300"></div>
+                    </div>
+                    <div class="journal-card flex-1 rounded-2xl p-5 group">
+                        <label class="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2 group-focus-within:text-emerald-400 transition-colors">Late Session</label>
+                        <textarea id="t4" class="journal-textarea w-full text-base text-gray-200 placeholder-white/10" placeholder="Closing loops..." rows="1"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 07:00 PM -->
+            <div class="journal-entry relative opacity-0 transform translate-y-4">
+                <div class="flex gap-4">
+                    <div class="flex flex-col items-center gap-1 min-w-[40px]">
+                        <span class="text-xs font-mono text-emerald-500/80">19:00</span>
+                        <div class="w-3 h-3 rounded-full bg-surface border-2 border-emerald-900 z-10 box-dot transition-colors duration-300"></div>
+                    </div>
+                    <div class="journal-card flex-1 rounded-2xl p-5 group">
+                        <label class="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2 group-focus-within:text-emerald-400 transition-colors">Evening</label>
+                        <textarea id="t5" class="journal-textarea w-full text-base text-gray-200 placeholder-white/10" placeholder="Dinner & family..." rows="1"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 10:00 PM -->
+            <div class="journal-entry relative opacity-0 transform translate-y-4">
+                <div class="flex gap-4">
+                    <div class="flex flex-col items-center gap-1 min-w-[40px]">
+                        <span class="text-xs font-mono text-emerald-500/80">22:00</span>
+                        <div class="w-3 h-3 rounded-full bg-surface border-2 border-emerald-900 z-10 box-dot transition-colors duration-300"></div>
+                    </div>
+                    <div class="journal-card flex-1 rounded-2xl p-5 group">
+                        <label class="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-2 group-focus-within:text-emerald-400 transition-colors">Reflection</label>
+                        <textarea id="t6" class="journal-textarea w-full text-base text-gray-200 placeholder-white/10" placeholder="Final thoughts..." rows="1"></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Floating Action Button -->
+    <div class="fixed bottom-0 left-0 w-full p-6 bg-gradient-to-t from-black via-black to-transparent z-50 opacity-0" id="fab-anim">
+        <button id="saveBtn" class="liquid-btn w-full bg-emerald-600 text-white font-display font-medium text-lg py-4 rounded-2xl shadow-neon hover:shadow-neon-hover transform transition-transform active:scale-95 flex justify-center items-center gap-2">
+            <span>Secure Entry</span>
+            <svg class="w-5 h-5 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+        </button>
+    </div>
+
+    <script>
+        // --- CONFIGURATION ---
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw5WUoR6XUk8_86aEV1K5uUcOUGWfL3m0xiAaBGzbNhOsuBEwpUj1HWXBcd_slE_Yzy7g/exec";
+
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            // Remove Loading Veil with Fade
+            const veil = document.getElementById('auth-loading');
+            if(veil) {
+                gsap.to(veil, { opacity: 0, duration: 0.5, onComplete: () => veil.style.display = 'none' });
+            }
+
+            // Display Username
+            if(window.currentUser) {
+                document.getElementById('user-display').innerText = window.currentUser;
+            }
+
+            // Logout Logic
+            document.getElementById('logoutBtn').addEventListener('click', () => {
+                if(confirm("Disconnect session?")) {
+                    localStorage.removeItem('r_journal_session');
+                    window.location.href = 'login.html';
+                }
+            });
+
+            // --- 1. Date Logic ---
+            const dateInput = document.getElementById('datePicker');
+            const dateDisplay = document.getElementById('dateDisplay');
+            const dateCapsule = document.getElementById('dateCapsule');
+
+            dateCapsule.addEventListener('click', (e) => {
+                if(e.target === dateInput) return;
+                try { dateInput.showPicker(); } 
+                catch (err) { dateInput.click(); dateInput.focus(); }
+            });
+            
+            const updateDateDisplay = (dateObj) => {
+                const options = { weekday: 'short', month: 'short', day: 'numeric' };
+                dateDisplay.innerText = dateObj.toLocaleDateString('en-US', options);
+            };
+
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            const dd = String(today.getDate()).padStart(2, '0');
+            
+            dateInput.value = `${yyyy}-${mm}-${dd}`;
+            updateDateDisplay(today);
+
+            dateInput.addEventListener('change', (e) => {
+                if (!e.target.value) return; 
+                const parts = e.target.value.split('-');
+                const selectedDate = new Date(parts[0], parts[1] - 1, parts[2]);
+                gsap.fromTo(dateDisplay, { opacity: 0 }, { opacity: 1, duration: 0.5 });
+                updateDateDisplay(selectedDate);
+            });
+
+            // --- 2. Animations ---
+            gsap.to("#bg-pulse", {
+                scale: 1.2,
+                opacity: 0.8,
+                duration: 4,
+                repeat: -1,
+                yoyo: true,
+                ease: "sine.inOut"
+            });
+
+            const tl = gsap.timeline({ defaults: { ease: "power3.out" } });
+            tl.to("#header-anim", { opacity: 1, y: 0, duration: 0.8 })
+              .to(".journal-entry", { opacity: 1, y: 0, stagger: 0.1, duration: 0.6 }, "-=0.4")
+              .to("#fab-anim", { opacity: 1, y: 0, duration: 0.5 }, "-=0.2");
+
+            // --- 3. Interaction & Data Submission ---
+            const textareas = document.querySelectorAll('textarea');
+            textareas.forEach(tx => {
+                tx.addEventListener('input', function() {
+                    this.style.height = 'auto';
+                    this.style.height = (this.scrollHeight) + 'px';
+                });
+                
+                tx.addEventListener('focus', function() {
+                    const dot = this.closest('.journal-entry').querySelector('.box-dot');
+                    dot.classList.remove('border-white/10');
+                    dot.classList.add('bg-emerald-500', 'border-emerald-500', 'shadow-neon');
+                });
+
+                tx.addEventListener('blur', function() {
+                    if(this.value === '') {
+                        const dot = this.closest('.journal-entry').querySelector('.box-dot');
+                        dot.classList.remove('bg-emerald-500', 'border-emerald-500', 'shadow-neon');
+                        dot.classList.add('border-white/10');
+                    }
+                });
+            });
+
+            const saveBtn = document.getElementById('saveBtn');
+            const originalBtnContent = `
+                <span>Secure Entry</span>
+                <svg class="w-5 h-5 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+            `;
+
+            saveBtn.addEventListener('click', () => {
+                // 1. Gather Data
+                const dateVal = dateInput.value;
+                const notesData = [
+                    document.getElementById('t1').value || "-", // 08:00
+                    document.getElementById('t2').value || "-", // 10:00
+                    document.getElementById('t3').value || "-", // 13:00
+                    document.getElementById('t4').value || "-", // 16:00
+                    document.getElementById('t5').value || "-", // 19:00
+                    document.getElementById('t6').value || "-"  // 22:00
+                ];
+
+                // Use the Dynamic Username from Auth Check
+                const finalUser = window.currentUser || "Unknown";
+
+                const payload = {
+                    action: "submit",
+                    username: finalUser,
+                    date: dateVal,
+                    notes: notesData
+                };
+
+                // 2. Set UI to Loading State
+                saveBtn.disabled = true;
+                saveBtn.innerHTML = `
+                    <span>Syncing...</span>
+                    <div class="spinner"></div>
+                `;
+
+                // 3. Send Request
+                fetch(SCRIPT_URL, {
+                    method: "POST",
+                    body: JSON.stringify(payload)
+                })
+                .then(res => res.json())
+                .then(response => {
+                    if(response.status === "success") {
+                        // Success State
+                        saveBtn.style.background = '#064e3b';
+                        saveBtn.innerHTML = `
+                            <span class="text-emerald-400">Synced to Cloud</span>
+                            <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                        `;
+
+                        setTimeout(() => {
+                            saveBtn.style.background = ''; 
+                            saveBtn.innerHTML = originalBtnContent;
+                            saveBtn.disabled = false;
+                        }, 2500);
+                    } else {
+                        throw new Error(response.message || "Unknown Error");
+                    }
+                })
+                .catch(err => {
+                    // Error State
+                    console.error(err);
+                    saveBtn.style.background = '#7f1d1d'; // Red
+                    saveBtn.innerHTML = `<span>Error Syncing</span>`;
+                    
+                    setTimeout(() => {
+                        saveBtn.style.background = ''; 
+                        saveBtn.innerHTML = originalBtnContent;
+                        saveBtn.disabled = false;
+                    }, 2500);
+                });
+            });
+        });
+    </script>
+</body>
+</html>
+
+

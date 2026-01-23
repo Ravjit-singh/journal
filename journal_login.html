@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Login | R Journal</title>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&family=Outfit:wght@300;500;700&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- GSAP -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+
+    <!-- Config -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        void: '#050505',
+                        surface: '#0A0A0A',
+                        'surface-light': '#121212',
+                        emerald: {
+                            400: '#34d399',
+                            500: '#10b981',
+                            900: '#064e3b',
+                            glow: 'rgba(16, 185, 129, 0.4)'
+                        },
+                        text: {
+                            main: '#e5e5e5',
+                            muted: '#737373'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        display: ['Outfit', 'sans-serif'],
+                    },
+                    boxShadow: {
+                        'neon': '0 0 15px rgba(16, 185, 129, 0.15)',
+                        'neon-hover': '0 0 25px rgba(16, 185, 129, 0.25)',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #000000;
+            color: #e5e5e5;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Background Blob */
+        .bio-gradient {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 120vw;
+            height: 120vh;
+            background: radial-gradient(circle at 50% 50%, rgba(6, 78, 59, 0.2) 0%, transparent 60%);
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        /* Glassmorphism Input Containers */
+        .login-input-group {
+            background: linear-gradient(145deg, rgba(20,20,20,0.6), rgba(10,10,10,0.8));
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        .login-input-group:focus-within {
+            border-color: rgba(52, 211, 153, 0.5);
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.1);
+            background: linear-gradient(145deg, rgba(25,25,25,0.8), rgba(15,15,15,0.9));
+        }
+
+        input {
+            background: transparent;
+            border: none;
+            outline: none;
+            color: white;
+            width: 100%;
+        }
+        
+        input::placeholder {
+            color: rgba(255, 255, 255, 0.2);
+        }
+
+        /* Button Animation */
+        .liquid-btn {
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        .liquid-btn::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+        .liquid-btn:active::before {
+            left: 100%;
+        }
+
+        .spinner {
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top: 2px solid #ffffff;
+            width: 16px;
+            height: 16px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        /* Loading Overlay for Auto-Login */
+        #auth-check-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            z-index: 9999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+    </style>
+</head>
+<body class="antialiased min-h-screen flex flex-col justify-center items-center relative overflow-hidden">
+
+    <!-- 0. Session Check Overlay (Prevents flash of login screen if already logged in) -->
+    <div id="auth-check-overlay">
+        <div class="spinner"></div>
+    </div>
+
+    <script>
+        // --- IMMEDIATE SESSION CHECK ---
+        (function() {
+            try {
+                const sessionData = localStorage.getItem('r_journal_session');
+                if (sessionData) {
+                    const session = JSON.parse(sessionData);
+                    const now = new Date().getTime();
+                    
+                    // Check if token exists and is not expired
+                    if (session && session.expiry > now) {
+                        // Valid session found -> Redirect immediately
+                        window.location.href = 'journal.html';
+                    } else {
+                        // Expired -> Clean up
+                        localStorage.removeItem('r_journal_session');
+                        // Remove overlay to show login form
+                        document.addEventListener("DOMContentLoaded", () => {
+                             const overlay = document.getElementById('auth-check-overlay');
+                             if(overlay) overlay.style.display = 'none';
+                        });
+                    }
+                } else {
+                    // No session -> Remove overlay to show login form
+                    document.addEventListener("DOMContentLoaded", () => {
+                         const overlay = document.getElementById('auth-check-overlay');
+                         if(overlay) overlay.style.display = 'none';
+                    });
+                }
+            } catch (e) {
+                console.error("Session check failed", e);
+                localStorage.removeItem('r_journal_session');
+                // Remove overlay on error
+                document.addEventListener("DOMContentLoaded", () => {
+                     const overlay = document.getElementById('auth-check-overlay');
+                     if(overlay) overlay.style.display = 'none';
+                });
+            }
+        })();
+    </script>
+
+    <!-- Breathing Background -->
+    <div class="bio-gradient" id="bg-pulse"></div>
+
+    <main class="w-full max-w-sm px-6 relative z-10">
+        
+        <!-- Header -->
+        <div class="text-center mb-12 opacity-0" id="logo-anim">
+            <div class="w-12 h-12 mx-auto bg-gradient-to-br from-emerald-900 to-black border border-emerald-500/30 rounded-xl flex items-center justify-center mb-4 shadow-neon">
+                <span class="font-display font-bold text-emerald-500 text-xl">R</span>
+            </div>
+            <h1 class="text-2xl font-display font-medium text-white tracking-tight">Welcome Back</h1>
+            <p class="text-text-muted text-sm mt-2">Enter your credentials to access the flow.</p>
+        </div>
+
+        <!-- Form -->
+        <div class="space-y-5 opacity-0" id="form-anim">
+            
+            <!-- Identity Input -->
+            <div class="login-input-group rounded-2xl p-4 group">
+                <label class="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-1 group-focus-within:text-emerald-400 transition-colors">Identity</label>
+                <div class="flex items-center gap-3">
+                    <svg class="w-5 h-5 text-gray-500 group-focus-within:text-emerald-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                    <input type="text" id="username" placeholder="Username (e.g. Ravjit)" autocomplete="off">
+                </div>
+            </div>
+
+            <!-- Access Key Input -->
+            <div class="login-input-group rounded-2xl p-4 group">
+                <label class="block text-[10px] font-bold text-text-muted uppercase tracking-widest mb-1 group-focus-within:text-emerald-400 transition-colors">Access Key</label>
+                <div class="flex items-center gap-3">
+                    <svg class="w-5 h-5 text-gray-500 group-focus-within:text-emerald-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                    <input type="password" id="password" placeholder="••••••••" autocomplete="current-password">
+                </div>
+            </div>
+
+            <!-- Action Button -->
+            <button id="loginBtn" class="liquid-btn w-full bg-emerald-600 text-white font-display font-medium text-lg py-4 rounded-2xl shadow-neon hover:shadow-neon-hover transform transition-all active:scale-95 flex justify-center items-center gap-2 mt-8">
+                <span>Initialize Session</span>
+                <svg class="w-5 h-5 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+            </button>
+
+            <!-- Status Message Area -->
+            <p id="statusMsg" class="text-center text-xs text-red-400 mt-4 opacity-0 transition-opacity min-h-[1rem]"></p>
+        </div>
+
+    </main>
+
+    <script>
+        // --- CONFIGURATION ---
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw5WUoR6XUk8_86aEV1K5uUcOUGWfL3m0xiAaBGzbNhOsuBEwpUj1HWXBcd_slE_Yzy7g/exec";
+
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            // --- 1. Animations ---
+            gsap.to("#bg-pulse", {
+                scale: 1.1,
+                opacity: 0.8,
+                duration: 5,
+                repeat: -1,
+                yoyo: true,
+                ease: "sine.inOut"
+            });
+
+            const tl = gsap.timeline({ defaults: { ease: "power3.out" } });
+            tl.to("#logo-anim", { opacity: 1, y: 0, duration: 1 })
+              .to("#form-anim", { opacity: 1, y: 0, duration: 0.8 }, "-=0.6");
+
+            // --- 2. Login Logic ---
+            const loginBtn = document.getElementById('loginBtn');
+            const usernameInput = document.getElementById('username');
+            const passwordInput = document.getElementById('password');
+            const statusMsg = document.getElementById('statusMsg');
+            const originalBtnContent = `
+                <span>Initialize Session</span>
+                <svg class="w-5 h-5 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+            `;
+
+            loginBtn.addEventListener('click', () => {
+                const user = usernameInput.value;
+                const pass = passwordInput.value;
+                
+                if(!user || !pass) {
+                    gsap.to(loginBtn, { x: [-10, 10, -10, 10, 0], duration: 0.4 });
+                    statusMsg.innerText = "Please enter both identity and key.";
+                    statusMsg.style.color = "#f87171";
+                    statusMsg.style.opacity = "1";
+                    return;
+                }
+
+                // Loading State
+                loginBtn.disabled = true;
+                statusMsg.style.opacity = "0"; 
+                loginBtn.innerHTML = `
+                    <span class="mr-2">Authenticating...</span>
+                    <div class="spinner"></div>
+                `;
+
+                // Prepare Payload
+                const payload = {
+                    action: "login",
+                    username: user,
+                    password: pass
+                };
+
+                // Send Request
+                fetch(SCRIPT_URL, {
+                    method: "POST",
+                    body: JSON.stringify(payload)
+                })
+                .then(res => res.json())
+                .then(response => {
+                    if(response.status === "success") {
+                        // --- SUCCESS & TOKEN GENERATION ---
+                        loginBtn.style.background = '#064e3b';
+                        loginBtn.innerHTML = `
+                            <span class="text-emerald-400">Access Granted</span>
+                            <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                        `;
+                        
+                        // 1. Generate Local Token (30 Days Validity)
+                        const daysToLive = 30; 
+                        const now = new Date().getTime();
+                        const expiry = now + (daysToLive * 24 * 60 * 60 * 1000);
+                        
+                        const sessionObject = {
+                            user: user,
+                            // Create a pseudo-random token string
+                            token: Math.random().toString(36).substr(2) + Date.now().toString(36),
+                            expiry: expiry
+                        };
+
+                        // 2. Save to Device
+                        localStorage.setItem('r_journal_session', JSON.stringify(sessionObject));
+                        localStorage.setItem('journal_user', user); // Legacy support
+
+                        // 3. Redirect
+                        setTimeout(() => {
+                            window.location.href = 'journal.html'; 
+                        }, 800);
+                    } else {
+                        throw new Error(response.message || "Invalid Credentials");
+                    }
+                })
+                .catch(err => {
+                    // ERROR HANDLING
+                    console.error(err);
+                    gsap.to(loginBtn, { x: [-10, 10, -10, 10, 0], duration: 0.4 });
+                    
+                    loginBtn.style.background = '#7f1d1d'; 
+                    loginBtn.innerHTML = `<span>Access Denied</span>`;
+                    
+                    statusMsg.innerText = "Invalid Identity or Access Key.";
+                    statusMsg.style.color = "#f87171";
+                    statusMsg.style.opacity = "1";
+
+                    setTimeout(() => {
+                        loginBtn.style.background = ''; 
+                        loginBtn.innerHTML = originalBtnContent;
+                        loginBtn.disabled = false;
+                    }, 2000);
+                });
+            });
+            
+            document.addEventListener('keypress', (e) => {
+                if(e.key === 'Enter') loginBtn.click();
+            });
+        });
+    </script>
+</body>
+</html>
+
+
